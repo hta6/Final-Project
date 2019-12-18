@@ -3,7 +3,7 @@ title: "Final Project"
 author: "Hanh Ta"
 date: "12/12/2019"
 output: 
-  html_document:
+  rmarkdown::github_document
     toc: true
     toc_depth: 4
     theme: united
