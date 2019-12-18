@@ -1,0 +1,553 @@
+---
+title: "Final Project"
+author: "Hanh Ta"
+date: "12/12/2019"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 4
+    theme: united
+    highlight: tango
+---
+<h1> DC Airbnb Analysis </h1>
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<h2> Import the data </h2>
+```{r import, message=FALSE, comment=FALSE}
+library(tidyverse)
+airbnb_df <- read_csv("listings_2.csv")
+```
+
+<h2> Clean the data </h2>
+
+```{r clean}
+airbnb_df[,c("host_response_rate", 
+             "bathrooms",
+             "weekly_price",
+             "monthly_price",
+             "cleaning_fee",
+             "security_deposit",
+             "guests_included",
+             "extra_people",
+             "review_scores_rating")] <- NULL
+```
+
+```{r, eval=FALSE,include=FALSE}
+#str(airbnb_df)
+#$neighbourhood <- as.factor(airbnb_df$neighbourhood)
+#airbnb_df$last_review <- as.Date(airbnb_df$last_review, "%m/%d/%y")
+```
+
+It is necessary to convert the data type of some categorical variables of interest to factor.
+```{r convert}
+airbnb_df$neighbourhood_cleansed <- as.factor(airbnb_df$neighbourhood_cleansed)
+airbnb_df$neighbourhood <- as.factor(airbnb_df$neighbourhood)
+airbnb_df$property_type <- as.factor(airbnb_df$property_type)
+airbnb_df$room_type <- as.factor(airbnb_df$room_type)
+airbnb_df$bed_type <- as.factor(airbnb_df$bed_type)
+airbnb_df$cancellation_policy <- as.factor(airbnb_df$cancellation_policy)
+```
+
+
+### 1. Describe your dataset. Give the source of the dataset and a metadata listing for each variable. 
+
+<p>Source: Detailed Listings data for Washington, D.C. from Inside Airbnb (http://insideairbnb.com/get-the-data.html)</p>
+
+Variable               | Type     | Description
+-----------------------|----------|-------------------------------------------------
+host_id                | num      | Host identification number
+host_name              | char     | Name of host
+neighbourhood_cleansed | factor   | Property's neighborhood group
+neighbourhood          | factor   | Property's neighborhood
+zipcode                | char     | Property's zipcode
+latitude               | num      | Latitude coordinate of property
+longitude              | num      | Longitude coordinate of propert
+property_type          | factor   | Type of property
+room_type              | factor   | Type of room
+accommodates           | num      | Number of people the property can accommodate
+bedrooms               | num      | Number of available bedrooms
+beds                   | num      | Number of available beds
+bed_type               | factor   | Type of bed
+price                  | num      | Listing price
+minimum_nights         | num      | Minimum of night per stay
+availability_365       | num      | Property's availaility in the next 365 days
+availability_30        | num      | Property's availaility in the next 30 days
+availability_60        | num      | Property's availaility in the next 60 days 
+availability_90        | num      | Property's availaility in the next 90 days
+reviews_per_month      | num      | Number of reviews per month
+cancellation_policy    | factor   | Cancellation policy
+
+### 2. Read in your dataset and calculate
+#### a. The number of missing values in your dataset
+#### b. The percentage of missing values in your dataset. 
+```{r}
+airbnb_df %>% summarise(count=sum(is.na(airbnb_df)))
+sum(is.na(airbnb_df))/prod(nrow(airbnb_df),ncol(airbnb_df))*100
+```
+There are 2000 missing values (1.04%) in this dataset recognized by R as NA.
+
+
+### 3. Give TWO questions about your dataset that you are going to investigate.
+
+<p><b>Question 1:</b> What are the most common Airbnb properties in D.C.? What is the variation in price for different types of property?</p>
+<p><b>Question 2:</b> How does location influence property rental price? 
+
+### 4. Perform EDA to answer your research questions.
+
+#### Question 1. What are the most common Airbnb properties in D.C.? What is the variation in price for different types of property?
+```{r}
+summary(airbnb_df$price)
+sd(airbnb_df$price)
+```
+<p> 
+  <ul>
+    <li>$115 is the average listing price for properties on Airbnb in this data sample.</li>
+    <li>Minimum price: $10</li>
+    <li>Maximum price: $10,000</li>
+  </ul>
+</p>
+```{r}
+prop_type <- airbnb_df %>% group_by(property_type) %>% summarise(average_price=mean(price,na.rm = TRUE), 
+                                                                 min_price=min(price, na.rm=TRUE), 
+                                                                 max_price=max(price, na.rm = TRUE), 
+                                                                 std=sd(price,na.rm = TRUE),
+                                                                 min_night=min(minimum_nights,na.rm=TRUE), 
+                                                                 accom=median(accommodates, na.rm=TRUE), 
+                                                                 range=max(price, na.rm=TRUE)-min(price,na.rm=TRUE))
+
+head(arrange(prop_type, average_price, min_night),3)
+tail(arrange(prop_type, average_price, min_night),3)
+```
+<p>
+  <ul>
+    <li>Hostel has the lowest mean price of all, followed by Bungalow and Guest Suite.</li>
+    <li>Dome house and Resort have the highest mean prices with indeterminate standard variation since there is only one entry of data recorded for each of these properties.</li>
+  </ul>
+</p>
+```{r,echo=FALSE, fig.align="center" }
+ggplot(airbnb_df, aes(price,property_type)) + 
+  geom_count(color="#D99543") + 
+  labs(title="Common Listing on Airbnb", 
+       x="Price [$]", 
+       y="Accomodation Types") + 
+  theme(legend.position = "bottom", 
+        legend.key.size = unit(c(0.3),"lines")) +
+  scale_fill_brewer(palette="Set3")
+```
+<p> From the visualization, apartment is the most common property on Airbnb. Now let's look at the frequency table of the property type to confirm:</p>
+```{r}
+table_prop <- as.data.frame(table(airbnb_df$property_type)/length(airbnb_df$property_type)*100)
+head(arrange(table_prop,desc(Freq)),10)
+```
+<ul>
+    <li>Apartments: 46% of listing in this data sample</li>
+    <li>House: 21.2% of listing </li>
+    <li>Townhouse: 15.4% of listing</li>
+    <li>Condominium: 8% of listing</li>
+</ul>
+```{r, eval=FALSE,include=FALSE}
+sub_prop <- subset(airbnb_df,
+                   property_type == "Apartment" 
+                   | property_type == "Townhouse" 
+                   | property_type == "Condominium" 
+                   | property_type == "Hostel" 
+                   | property_type == "House")
+```
+
+```{r, echo=FALSE, fig.align="center"}
+ggplot(airbnb_df, 
+       aes(x = reorder(property_type, price, FUN = median),
+           y = price,
+           group=property_type, 
+           fill=property_type)) + 
+  geom_boxplot(outlier.alpha=0.2,
+               outlier.size = 0.5,
+               lwd=0.3,
+               mapping= aes(fill=property_type)) + 
+  labs(title="Price Variation of Property Type", 
+       y="Price [$]", 
+       x="Property Type") + 
+  theme(axis.text.x = element_text(angle = 0, hjust=0.5, size=9), 
+        legend.position = "none") +
+  coord_flip(ylim=c(0,1500)) 
+
+```
+<p>
+  <ul>
+    <li>Resort has a highest median price, but there is only one entry of data for this property.</li>
+    <li>House has the most outliers and variation in price compared to other properties.</li>
+    <li>Hostel is the cheapest Airbnb property.</li>
+    <li>Townhouse and Condominium appear to have the same price range, but Condominium is slightly cheaper. </li>
+  </ul>
+<p>
+
+#### Question 2. How does location influence property rental price?
+
+```{r, eval=FALSE,include=FALSE}
+#levels(neighborhood_df$neighbourhood_cleansed) <- gsub("\n","",levels(neighborhood_df$neighbourhood_cleansed))
+neighborhood_df <- airbnb_df %>% group_by(neighbourhood_cleansed) %>% 
+  summarise(average_price=mean(price,na.rm = TRUE), 
+            min_price=min(price, na.rm=TRUE), 
+            max_price=max(price, na.rm = TRUE), 
+            std=sd(price,na.rm = TRUE),
+            median_price=median(price, na.rm=TRUE),
+            min_night=min(minimum_nights,na.rm=TRUE), 
+            accom=median(accommodates, na.rm=TRUE), 
+            range=max(price, na.rm=TRUE)-min(price,na.rm=TRUE))
+
+neighborhood_df %>% mutate(neighbourhood_cleansed=fct_reorder(neighbourhood_cleansed,median_price,.desc = FALSE)) %>%
+ggplot(neighborhood_df,
+       mapping = aes(x=neighbourhood_cleansed, 
+           y=median_price,fill=median_price)) + 
+geom_col() + 
+coord_flip() +
+labs(title="Median Price Among D.C. Neighborhoods ",
+       y="Median Price [$]") +
+theme(axis.text.y = element_text(angle = 0, hjust=1, size=7),
+        #aspect.ratio = 1.2,
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+        #plot.title = element_text(hjust=4,vjust=0.2))
+scale_fill_distiller(palette="Blues") +
+scale_x_discrete(labels=c("Spring Valley, Palisades, Wesley Heights, Foxhall Crescent, Foxhall Village, Georgetown Reservoir" = "Spring Valley, Palisades",
+                            "Twining, Fairlawn, Randle Highlands, Penn Branch, Fort Davis Park, Fort Dupont" = "Twining, Fairlawn, Randle Highlands",
+                            "Southwest Employment Area, Southwest/Waterfront, Fort McNair, Buzzard Point" = "Southwest/Waterfront",
+                            "North Michigan Park, Michigan Park, University Heights" = "North Michigan Park",
+                            "Lamont Riggs, Queens Chapel, Fort Totten, Pleasant Hill" = "Fort Totten, Pleasant Hill",
+                            "Kalorama Heights, Adams Morgan, Lanier Heights" = "Kalorama Heights, Adams Morgan",
+                            "Friendship Heights, American University Park, Tenleytown" = "Friendship Heights, Tenleytown",
+                            "Downtown, Chinatown, Penn Quarters, Mount Vernon Square, North Capitol Street" = "Downtown, Chinatown, Penn Quarters",
+                            "Deanwood, Burrville, Grant Park, Lincoln Heights, Fairmont Heights" = "Deanwood, Burrville, Grant Park",
+                            "Cleveland Park, Woodley Park, Massachusetts Avenue Heights, Woodland-Normanstone Terrace" = "Cleveland Park, Woodley Park",
+                            "Columbia Heights, Mt. Pleasant, Pleasant Plains, Park View" = "Columbia Heights, Mt. Pleasant",
+                            "Fairfax Village, Naylor Gardens, Hillcrest, Summit Park" = "Fairfax Village, Naylor Gardens",
+                            "Woodland/Fort Stanton, Garfield Heights, Knox Hill" = "Woodland/Fort Stanton"))
+
+neighborhood_df %>% mutate(neighbourhood_cleansed=fct_reorder(neighbourhood_cleansed,average_price,.desc = FALSE)) %>%
+ggplot(neighborhood_df,
+       mapping = aes(x=neighbourhood_cleansed, 
+           y=average_price,fill=average_price)) + 
+geom_col() + 
+coord_flip() +
+labs(title="Average Price Among D.C. Neighborhoods ",
+       y="Average Price [$]") +
+theme(axis.text.y = element_text(angle = 0, hjust=1, size=6),
+        aspect.ratio = 1.2,
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        plot.title = element_text(hjust=5,
+                                  vjust=0.2)) +
+scale_fill_distiller(palette="Blues")
+```
+
+```{r, echo=FALSE, fig.align="center",comment=FALSE}
+neighborhood_df <- airbnb_df %>% group_by(neighbourhood_cleansed) %>% 
+  summarise(average_price=mean(price,na.rm = TRUE), 
+            min_price=min(price, na.rm=TRUE), 
+            max_price=max(price, na.rm = TRUE), 
+            std=sd(price,na.rm = TRUE),
+            median_price=median(price, na.rm=TRUE),
+            min_night=min(minimum_nights,na.rm=TRUE), 
+            accom=median(accommodates, na.rm=TRUE), 
+            range=max(price, na.rm=TRUE)-min(price,na.rm=TRUE))
+
+neighborhood_df %>% 
+  mutate(neighbourhood_cleansed=fct_reorder(neighbourhood_cleansed,std,.desc = FALSE)) %>%
+  ggplot(neighborhood_df,
+         mapping = aes(x=neighbourhood_cleansed, 
+             y=std,fill=std)) + 
+  geom_col() + 
+  coord_flip() +
+  labs(title="Standard Deviation in Price Among D.C. Neighborhoods ",
+         y="Standard Deviation [$]") +
+  theme(axis.text.y = element_text(angle = 0, hjust=1, size=6),
+        #aspect.ratio = 1.2,
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+        #plot.title = element_text(hjust=1.5, vjust=0.2)) +
+  scale_fill_distiller(palette="Blues") +
+  scale_x_discrete(labels=c("Spring Valley, Palisades, Wesley Heights, Foxhall Crescent, Foxhall Village, Georgetown Reservoir" = "Spring Valley, Palisades",
+                              "Twining, Fairlawn, Randle Highlands, Penn Branch, Fort Davis Park, Fort Dupont" = "Twining, Fairlawn, Randle Highlands",
+                              "Southwest Employment Area, Southwest/Waterfront, Fort McNair, Buzzard Point" = "Southwest/Waterfront",
+                              "North Michigan Park, Michigan Park, University Heights" = "North Michigan Park",
+                              "Lamont Riggs, Queens Chapel, Fort Totten, Pleasant Hill" = "Fort Totten, Pleasant Hill",
+                              "Kalorama Heights, Adams Morgan, Lanier Heights" = "Kalorama Heights, Adams Morgan",
+                              "Friendship Heights, American University Park, Tenleytown" = "Friendship Heights, Tenleytown",
+                              "Downtown, Chinatown, Penn Quarters, Mount Vernon Square, North Capitol Street" = "Downtown, Chinatown, Penn Quarters",
+                              "Deanwood, Burrville, Grant Park, Lincoln Heights, Fairmont Heights" = "Deanwood, Burrville, Grant Park",
+                              "Cleveland Park, Woodley Park, Massachusetts Avenue Heights, Woodland-Normanstone Terrace" = "Cleveland Park, Woodley Park",
+                              "Columbia Heights, Mt. Pleasant, Pleasant Plains, Park View" = "Columbia Heights, Mt. Pleasant",
+                              "Fairfax Village, Naylor Gardens, Hillcrest, Summit Park" = "Fairfax Village, Naylor Gardens",
+                              "Woodland/Fort Stanton, Garfield Heights, Knox Hill" = "Woodland/Fort Stanton"))
+```
+<p>
+  <ul>
+    <li>Georgetown area has the highest standard deviation in listing price.</li>
+    <li>Sheridan, Barry Farm, Buena Vista has the smallest dispersion of price.</li>
+  </ul>
+<p>
+
+<p>Let's plot some boxplots to have a further insight into the price of each neighborhood:</p>
+```{r, echo=FALSE, fig.align="center"}
+ggplot(airbnb_df, 
+       aes(x = reorder(neighbourhood_cleansed, price, FUN = median),
+           y = price)) + 
+  geom_boxplot(outlier.alpha=0.2,
+               outlier.size = 0.5,
+               lwd=0.3,
+               aes(group=neighbourhood_cleansed,
+                   fill=neighbourhood_cleansed)) + 
+  labs(title="Price Variation Among D.C. Neighborhoods", 
+       y="Price [$]", 
+       x="Neighborhood") + 
+  theme(axis.text.x = element_text(angle = 0, hjust=0.5, size=9), 
+        axis.text.y = element_text(size = 7),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  coord_flip(ylim=c(0,1200)) +
+  scale_x_discrete(labels=c("Spring Valley, Palisades, Wesley Heights, Foxhall Crescent, Foxhall Village, Georgetown Reservoir" = "Spring Valley, Palisades",
+                            "Twining, Fairlawn, Randle Highlands, Penn Branch, Fort Davis Park, Fort Dupont" = "Twining, Fairlawn, Randle Highlands",
+                            "Southwest Employment Area, Southwest/Waterfront, Fort McNair, Buzzard Point" = "Southwest/Waterfront",
+                            "North Michigan Park, Michigan Park, University Heights" = "North Michigan Park",
+                            "Lamont Riggs, Queens Chapel, Fort Totten, Pleasant Hill" = "Fort Totten, Pleasant Hill",
+                            "Kalorama Heights, Adams Morgan, Lanier Heights" = "Kalorama Heights, Adams Morgan",
+                            "Friendship Heights, American University Park, Tenleytown" = "Friendship Heights, Tenleytown",
+                            "Downtown, Chinatown, Penn Quarters, Mount Vernon Square, North Capitol Street" = "Downtown, Chinatown, Penn Quarters",
+                            "Deanwood, Burrville, Grant Park, Lincoln Heights, Fairmont Heights" = "Deanwood, Burrville, Grant Park",
+                            "Cleveland Park, Woodley Park, Massachusetts Avenue Heights, Woodland-Normanstone Terrace" = "Cleveland Park, Woodley Park",
+                            "Columbia Heights, Mt. Pleasant, Pleasant Plains, Park View" = "Columbia Heights, Mt. Pleasant",
+                            "Fairfax Village, Naylor Gardens, Hillcrest, Summit Park" = "Fairfax Village, Naylor Gardens",
+                            "Woodland/Fort Stanton, Garfield Heights, Knox Hill" = "Woodland/Fort Stanton"))
+```
+<p>
+  <ul>
+    <li>West End, Foggy Botttom, GWU neighborhood group has the most variation in price range, followed by Southwest/Waterfront.</li>
+    <li>Downtown, Chinatown, Penn Quarters area has the highest median price.</li>
+    <li>Eastland Gardens, Kenilworth area has the lowest median price.</li>
+    <li>Columbia Heights-Mt.Pleasant and Cathedral Heights appear to have the same price range with Cathedral Heights having a slightly cheaper median price.</li>
+  </ul>
+<p>
+```{r,eval=FALSE,include=FALSE, fig.align="center"}
+ggplot(airbnb_df,
+       mapping = aes(neighbourhood_cleansed,
+           fill=room_type)) + 
+geom_bar() +
+coord_flip() +
+labs(title="Room Type Distribution Among D.C. Neighborhoods") + 
+theme(legend.position = "bottom",
+      axis.text.y = element_text(angle = 0, hjust=1, size=6),
+      axis.title.y = element_blank(),
+      legend.title = element_blank(),
+      legend.key.size = unit(c(0.6),"lines"),
+      plot.title = element_text(hjust=2.5,vjust=0.2)) +
+guides(fill = guide_legend(nrow = 2, byrow=TRUE)) +
+scale_fill_brewer(palette="Set3") + 
+  scale_x_discrete(labels=c("Spring Valley, Palisades, Wesley Heights, Foxhall Crescent, Foxhall Village, Georgetown Reservoir" = "Spring Valley, Palisades",
+                            "Twining, Fairlawn, Randle Highlands, Penn Branch, Fort Davis Park, Fort Dupont" = "Twining, Fairlawn, Randle Highlands",
+                            "Southwest Employment Area, Southwest/Waterfront, Fort McNair, Buzzard Point" = "Southwest/Waterfront",
+                            "North Michigan Park, Michigan Park, University Heights" = "North Michigan Park",
+                            "Lamont Riggs, Queens Chapel, Fort Totten, Pleasant Hill" = "Fort Totten, Pleasant Hill",
+                            "Kalorama Heights, Adams Morgan, Lanier Heights" = "Kalorama Heights, Adams Morgan",
+                            "Friendship Heights, American University Park, Tenleytown" = "Friendship Heights, Tenleytown",
+                            "Downtown, Chinatown, Penn Quarters, Mount Vernon Square, North Capitol Street" = "Downtown, Chinatown, Penn Quarters",
+                            "Deanwood, Burrville, Grant Park, Lincoln Heights, Fairmont Heights" = "Deanwood, Burrville, Grant Park",
+                            "Cleveland Park, Woodley Park, Massachusetts Avenue Heights, Woodland-Normanstone Terrace" = "Cleveland Park, Woodley Park",
+                            "Columbia Heights, Mt. Pleasant, Pleasant Plains, Park View" = "Columbia Heights, Mt. Pleasant",
+                            "Fairfax Village, Naylor Gardens, Hillcrest, Summit Park" = "Fairfax Village, Naylor Gardens",
+                            "Woodland/Fort Stanton, Garfield Heights, Knox Hill" = "Woodland/Fort Stanton"))
+
+```
+
+### 5. Write a two paragraph summary about what your EDA is telling you about your data. 
+
+<P> On average, airbnb users visiting DC should expect to pay \$115 per night. The most expensive accomodation costs \$10,000 for a minimum of four nights, and the cheapest option costs only \$10 for a night. The three most affordable airbnbs are hostel (\$46/night), bungalow (\$90.00/night), and guest suite (\$100/night) with standard deviation of \$32, \$70, and $74 respectively. On other other hand, resort is the most expensive lodging with indeterminate standard deviation since there is only one listing of this property type. From the visualization, the most common listing in DC with fairly low price is apartments followed by townhouses, single homes, and condominiums. Apartments account for 46% of the total listing, whereas only 15% of listed property are hostels. Looking at the "Price Variation of Property Type" graph, the single house category has the greatest variation in price with the highest price outlier. </p>
+
+<p> To determine the Airbnb price range for D.C. neighborhoods, we first look at the standard deviation visualization. Georgeotown, Burleith-Hillandale area has a greatest dispersion in price. This is due to an outlier - the $10,000 Historic Georgetown Residence. In contrast, Sheridan, Barry Farm, Buena Vista neighborhood has the lowest price's standard deviation. Furthermore, Downtown, Chinatown, Penn Quarters area has the highest median price. Columbia Heights-Mt.Pleasant and Cathedral Heights appear to have the same price range with Cathedral Heights having a slightly cheaper median price. </p>
+
+```{r not use, eval=FALSE,include=FALSE,warning=FALSE,echo=FALSE}
+library(geojsonio)
+dc_spdf <- geojson_read("neighbourhoods.geojson", what = "sp")
+library(sp)
+library(broom)
+library(mapproj)
+
+#'fortify' the data to get a dataframe format required by ggplot2
+dc_fortified <- tidy(dc_spdf)
+
+
+ggplot() +
+  geom_polygon(data=dc_fortified,
+               aes(x=long, y=lat, group=group),
+               fill="#69b3a2", 
+               color="white") +
+  theme_void() +
+  coord_map() + 
+  labs(title="D.C. Boundary") +
+  geom_point(data = point_coord, size = 0.2, shape = 19, na.rm=TRUE,
+             aes(x=longitude, y=latitude, colour=price)) +
+  scale_fill_gradient(low="red", high="yellow")
+
+library(leaflet.extras)
+point_coord[1:5000,c("longitude","latitude","price","neighbourhood")] %>%
+  leaflet() %>%
+  addTiles() %>%
+  addHeatmap(lng = ~longitude,
+             lat = ~latitude,
+             intensity= ~price,
+             group = ~neighbourhood,
+             minOpacity = 0.05,
+             max = 1,
+             radius = 20,
+             blur = 15)
+```
+<br>
+<p>In case you are bored, here is an interactive map for detailed listing of Airbnb properties in D.C.</p>
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.align="center"}
+library(leaflet)
+library(leaflet.extras)
+point_coord <- data.frame(airbnb_df[,c("latitude","longitude","price","neighbourhood","property_type")])
+point_coord[1:9152,c("longitude","latitude","price","property_type")] %>%
+  leaflet() %>%
+  addTiles() %>%
+  addMarkers(clusterOptions = markerClusterOptions(),
+             popup = paste("Property Type:", point_coord$property_type,"<br>",
+                           "Price: $", point_coord$price)) %>%
+  addResetMapButton()
+```
+
+### 6. Give a third question about your dataset that you want to investigate using a two-sample t-test.
+
+<p><b>Question:</b> Do townhouses have a higher average price compared to condominiums?</p>
+
+<p> A two sample t-test will be performed at the 95% confidence level. </p>
+
+Null hypothesis                                      | Alternative hypothesis
+-----------------------------------------------------|-------------------------------------------------------
+The average price of townhouses is equal to condos   | The average price of townhouses is higher than condos.
+$H_{o}:\mu_{T} = \mu_{C}$                            | $H_{a}:\mu_{T} > \mu_{C}$   
+
+```{r}
+townhouse <- airbnb_df %>% filter(property_type == "Townhouse")
+condo <- airbnb_df %>% filter(property_type == "Condominium")
+
+t.test(townhouse$price, condo$price, alternative="greater", conf.level = 0.95)
+```
+<p><b>P-value:</b> 0.1729 > $0.05 = \alpha$ </p>
+<p><b>Conclusion:</b> Fail to reject null hypothesis. </p>
+<p><b>Real-world interpretation:</b> The difference between the two samples' means is statistically nonsignificant. There is not enough evidence in our data to prove that the average price of townhouses is higher than condominiums. The price difference we observed in the visualization occurs likely due to chance. </p>
+<p> The 95% confidence interval means we can be 95% sure that the 95% confidence interval contains the true difference between the means of these two groups. Here a one-tail confidence interval from -6.36 to $\infty$ was used. This confidence interval contains 0 which implies that 0 is a reasonable possibility for the true value of the difference. Hence, we fail to reject the null hypothesis. </p>
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.align="center"}
+library(plotly)
+p <- ggplot(mapping = aes(fill=property_type, outlier.alpha=0.1)) + 
+  geom_boxplot(data=townhouse, mapping = aes(x=property_type, y=price)) +
+  geom_boxplot(data=condo, mapping = aes(x= property_type, y=price)) +
+  labs(title="Distribution in Price of Townhouse and Condominiums", y="Price [$]", x="Property Type") +
+  theme(legend.position = "none",
+        axis.title.x = element_blank()) 
+ggplotly(p)
+```
+
+### 7. Give a fourth question about your dataset that you can investigate using a Chi-Square test.
+
+<p><b>Question:</b> Is there a relationship between room type and bed type? </p>
+
+We'll perform a Chi-square test with $\alpha = 0.05$.
+
+Null hypothesis                                       | Alternative hypothesis
+------------------------------------------------------|------------------------------------------------------------
+$H_{o}:$ Room type and bed type are independent.      | $H_{a}:$ Room type and bed type are dependent.
+
+```{r, echo=FALSE, fig.align="center",comment=FALSE}
+room_bed <- airbnb_df %>% count(room_type, bed_type)
+
+#levels(neighbor_prop$neighbourhood_cleansed) <- gsub("\n", " ", levels(neighbor_prop$neighbourhood_cleansed))
+
+ggplot(data=room_bed) +
+  geom_tile(mapping = aes(y = room_type,
+                          x = bed_type,
+                          fill = n)) + 
+  theme(axis.title = element_blank(),
+        legend.key.size = unit(c("0.8"), "lines"),
+        axis.text.x = element_text(angle = 0,
+                                   size = 9,
+                                   hjust=0.5,
+                                   vjust=0.5),
+        axis.text.y = element_text(size = 9),
+        panel.grid.major = element_blank()) +
+  scale_fill_continuous(limits=c(0,6500), breaks=seq(0,6500,by=1000))
+```
+
+```{r, eval=FALSE,include=FALSE}
+scale_y_discrete(labels=c("Spring Valley, Palisades, Wesley Heights, Foxhall Crescent, Foxhall Village, Georgetown Reservoir" = "Spring Valley, Palisades",
+                            "Twining, Fairlawn, Randle Highlands, Penn Branch, Fort Davis Park, Fort Dupont" = "Twining, Fairlawn, Randle Highlands",
+                            "Southwest Employment Area, Southwest/Waterfront, Fort McNair, Buzzard Point" = "Southwest/Waterfront",
+                            "North Michigan Park, Michigan Park, University Heights" = "North Michigan Park",
+                            "Lamont Riggs, Queens Chapel, Fort Totten, Pleasant Hill" = "Fort Totten, Pleasant Hill",
+                            "Kalorama Heights, Adams Morgan, Lanier Heights" = "Kalorama Heights, Adams Morgan",
+                            "Friendship Heights, American University Park, Tenleytown" = "Friendship Heights, Tenleytown",
+                            "Downtown, Chinatown, Penn Quarters, Mount Vernon Square, North Capitol Street" = "Downtown, Chinatown, Penn Quarters",
+                            "Deanwood, Burrville, Grant Park, Lincoln Heights, Fairmont Heights" = "Deanwood, Burrville, Grant Park",
+                            "Cleveland Park, Woodley Park, Massachusetts Avenue Heights, Woodland-Normanstone Terrace" = "Cleveland Park, Woodley Park",
+                            "Columbia Heights, Mt. Pleasant, Pleasant Plains, Park View" = "Columbia Heights, Mt. Pleasant",
+                            "Fairfax Village, Naylor Gardens, Hillcrest, Summit Park" = "Fairfax Village, Naylor Gardens",
+                            "Woodland/Fort Stanton, Garfield Heights, Knox Hill" = "Woodland/Fort Stanton"))
+```
+
+```{r}
+table_room_bed <- table(airbnb_df$room_type, airbnb_df$bed_type)
+
+result <- chisq.test(table_room_bed)
+result
+```
+<p><b>P-value:</b> 3.491E-14 < $0.05 = \alpha$.</p>
+<p><b>Conclusion:</b> Reject null hypothesis.</p>
+<p><b>Real-world interpretation:</b> There is enough evidence to show that room type and bed type are related. However, the result may not be valid due to the test's error.</p>
+
+### 8. Give a fifth question about your dataset that involves the covariation of two quantitative variables.
+
+<p><b>Question:</b> Assuming I'm a hostel owner, I would like to predict the price depending on the number of beds I have. How does the price per night relate to the number of beds?<p>
+
+<p><b>Null hypothesis:</b>  $H_{o}:$ There is no correlation between the number of beds and the price.</p>
+<p><b>Alternative hypothesis:</b>  $H_{a}:$ There is correlation between the number of beds and the price.<p>
+
+```{r,eval=FALSE,include=FALSE}
+
+#apartment[c("price","accommodates","minimum_nights","availability_365","review_scores_rating","reviews_per_month")]
+#pairs(airbnb_data, col="blue")
+```
+
+```{r, echo=FALSE,fig.align="center"}
+ggplot(data = airbnb_df, mapping = aes(y = price, x = beds)) +
+  geom_point() +
+  geom_smooth(method = 'lm') + 
+  labs(title="Price Prediction based on the Number of Beds",
+       x="Number of Beds",
+       y="Price [$]")
+```
+
+```{r}
+lin_model <- lm(airbnb_df$price ~ airbnb_df$beds)
+lin_model
+summary(lin_model)
+```
+
+The linear model is: $$price = 50.52\ *\ number\ of\ beds\ +\ 95.96$$
+<p><b>P-value:</b> 2.2E-16 < 0.05 = $\alpha$
+<p>Our model is statistically significant, and there is a relationship between the number of beds and the price.</p>
+
+```{r}
+cor(airbnb_df$price, airbnb_df$beds, use = 'na.or.complete')
+```
+
+<p> With $r^2 = 0.06401$, we understand that 6.4% of variation in the price is due to the the number of beds. </p>
+<p> $r = 0.2532$ indicates a weak positive correlation between the two variables.</p>
+
+### 9. Write a two-paragraph summary of any ethical concerns about your dataset and/or project. 
+<p>There are some limitations I encounterred while analyzing the dataset. The Airbnb data from Inside Airbnb was last retrieved on November 22 in 2019, so the information will be solely based on what have been scraped from Airbnb website on that date. In addition, historical data for the property prices are not available in this dataset.</p>
+<p> While performing Chi-squared test for the two categorical variables room_type and bed_type, the test results came with a warning "Chi-squared approximation may be incorrect". This refers to the small expected counts of the varibles in the dataset; hence, the approximation may be poor. Since the p-value is relatively small compared to alpha, the null hypothesis was rejected. 
+
+
+
